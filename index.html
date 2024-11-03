@@ -8,6 +8,12 @@
 </head>
 <body>
     <h1>ECC Encryption Example</h1>
+    
+    <h2>Keys</h2>
+    <p><strong>Public Key:</strong> <span id="publicKey"></span></p>
+    <p><strong>Private Key:</strong> <span id="privateKey"></span></p>
+
+    <h2>Data Encryption</h2>
     <textarea id="inputData" rows="4" cols="50" placeholder="Enter data to encrypt..."></textarea><br>
     <button id="encryptButton">Encrypt Data</button>
     <button id="decryptButton" disabled>Decrypt Data</button>
@@ -24,10 +30,9 @@
         async function generateKeyPair() {
             const ec = new elliptic.ec('secp256k1');
             const keyPair = ec.genKeyPair();
-            return {
-                publicKey: keyPair.getPublic('hex'),
-                privateKey: keyPair.getPrivate('hex')
-            };
+            document.getElementById('publicKey').textContent = keyPair.getPublic('hex');
+            document.getElementById('privateKey').textContent = keyPair.getPrivate('hex');
+            return keyPair;
         }
 
         async function encryptData(data) {
@@ -65,10 +70,7 @@
         });
 
         // Generate keys on page load
-        generateKeyPair().then(keys => {
-            console.log('Public Key:', keys.publicKey);
-            console.log('Private Key:', keys.privateKey);
-        });
+        generateKeyPair();
     </script>
 </body>
 </html>
