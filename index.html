@@ -7,7 +7,20 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.3/elliptic.min.js"></script>
 </head>
 <body>
+    <h1>ECC Encryption Example</h1>
+    <textarea id="inputData" rows="4" cols="50" placeholder="Enter data to encrypt..."></textarea><br>
+    <button id="encryptButton">Encrypt Data</button>
+    <button id="decryptButton" disabled>Decrypt Data</button>
+    
+    <h2>Results</h2>
+    <h3>Encrypted Data:</h3>
+    <pre id="encryptedData"></pre>
+    <h3>Decrypted Data:</h3>
+    <pre id="decryptedData"></pre>
+
     <script>
+        let symmetricKey, iv, encryptedData;
+
         async function generateKeyPair() {
             const ec = new elliptic.ec('secp256k1');
             const keyPair = ec.genKeyPair();
@@ -17,42 +30,21 @@
             };
         }
 
-        async function encryptData(data, publicKey) {
+        async function encryptData(data) {
             // Generate a random symmetric key
-            const symmetricKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit key
+            symmetricKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit key
 
             // Encrypt the data using AES-GCM
-            const iv = window.crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+            iv = window.crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
             const encoder = new TextEncoder();
             const encodedData = encoder.encode(data);
             const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['encrypt']);
-            const encryptedData = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, encodedData);
+            encryptedData = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, encodedData);
 
-            // Encrypt the symmetric key using ECDH
-            const ec = new elliptic.ec('secp256k1');
-            const keyPair = ec.keyFromPublic(publicKey, 'hex');
-            const sharedKey = keyPair.derive(ec.keyFromPrivate(privateKey)).toArray();
-            const encryptedSymmetricKey = await window.crypto.subtle.encrypt(
-                { name: 'RSA-OAEP' },
-                publicKey, // You would need to convert the public key to a suitable format
-                symmetricKey
-            );
-
-            return {
-                encryptedData: new Uint8Array(encryptedData),
-                iv: Array.from(iv),
-                encryptedSymmetricKey: Array.from(encryptedSymmetricKey)
-            };
+            return new Uint8Array(encryptedData);
         }
 
-        async function decryptData(encryptedData, iv, encryptedSymmetricKey, privateKey) {
-            // Decrypt the symmetric key using the private key
-            const symmetricKey = await window.crypto.subtle.decrypt(
-                { name: 'RSA-OAEP' },
-                privateKey, // You would need to convert the private key to a suitable format
-                encryptedSymmetricKey
-            );
-
+        async function decryptData(encryptedData) {
             // Decrypt the data using AES-GCM
             const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['decrypt']);
             const decryptedData = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, encryptedData);
@@ -60,22 +52,23 @@
             return decoder.decode(decryptedData);
         }
 
-        async function main() {
-            const { publicKey, privateKey } = await generateKeyPair();
-            console.log('Public Key:', publicKey);
-            console.log('Private Key:', privateKey);
+        document.getElementById('encryptButton').addEventListener('click', async () => {
+            const inputData = document.getElementById('inputData').value;
+            const encrypted = await encryptData(inputData);
+            document.getElementById('encryptedData').textContent = Array.from(encrypted).map(b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('decryptButton').disabled = false; // Enable decrypt button
+        });
 
-            const data = 'Hello, World!';
-            const { encryptedData, iv, encryptedSymmetricKey } = await encryptData(data, publicKey);
-            console.log('Encrypted Data:', encryptedData);
-            console.log('IV:', iv);
-            console.log('Encrypted Symmetric Key:', encryptedSymmetricKey);
+        document.getElementById('decryptButton').addEventListener('click', async () => {
+            const decrypted = await decryptData(encryptedData);
+            document.getElementById('decryptedData').textContent = decrypted;
+        });
 
-            const decryptedData = await decryptData(encryptedData, iv, encryptedSymmetricKey, privateKey);
-            console.log('Decrypted Data:', decryptedData);
-        }
-
-        main();
+        // Generate keys on page load
+        generateKeyPair().then(keys => {
+            console.log('Public Key:', keys.publicKey);
+            console.log('Private Key:', keys.privateKey);
+        });
     </script>
 </body>
 </html>
