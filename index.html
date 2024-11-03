@@ -3,74 +3,284 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ECC Encryption Example</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.3/elliptic.min.js"></script>
+    <title>Asymmetric Encryption Demo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .key-section, .message-section {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .key-display {
+            margin: 1rem 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            resize: vertical;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0.5rem 0;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 4px;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .flex-container {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .flex-container > div {
+            flex: 1;
+        }
+
+        @media (max-width: 768px) {
+            .flex-container {
+                flex-direction: column;
+            }
+        }
+    </style>
 </head>
 <body>
-    <h1>ECC Encryption Example</h1>
-    
-    <h2>Keys</h2>
-    <p><strong>Public Key:</strong> <span id="publicKey"></span></p>
-    <p><strong>Private Key:</strong> <span id="privateKey"></span></p>
+    <div class="container">
+        <h1>Asymmetric Encryption Demo</h1>
+        
+        <div class="key-section">
+            <button id="generateKeys">Generate New Key Pair</button>
+            <div class="flex-container">
+                <div>
+                    <h3>Public Key</h3>
+                    <div id="publicKey" class="key-display">No key generated</div>
+                </div>
+                <div>
+                    <h3>Private Key</h3>
+                    <div id="privateKey" class="key-display">No key generated</div>
+                </div>
+            </div>
+        </div>
 
-    <h2>Data Encryption</h2>
-    <textarea id="inputData" rows="4" cols="50" placeholder="Enter data to encrypt..."></textarea><br>
-    <button id="encryptButton">Encrypt Data</button>
-    <button id="decryptButton" disabled>Decrypt Data</button>
-    
-    <h2>Results</h2>
-    <h3>Encrypted Data:</h3>
-    <pre id="encryptedData"></pre>
-    <h3>Decrypted Data:</h3>
-    <pre id="decryptedData"></pre>
+        <div class="message-section">
+            <div class="flex-container">
+                <div>
+                    <h3>Original Message</h3>
+                    <textarea id="originalMessage" placeholder="Enter message to encrypt"></textarea>
+                    <button id="encrypt">Encrypt Message</button>
+                </div>
+                <div>
+                    <h3>Encrypted Message</h3>
+                    <textarea id="encryptedMessage" placeholder="Encrypted message will appear here" readonly></textarea>
+                    <button id="decrypt">Decrypt Message</button>
+                </div>
+            </div>
+            <h3>Decrypted Message</h3>
+            <textarea id="decryptedMessage" placeholder="Decrypted message will appear here" readonly></textarea>
+        </div>
+
+        <div id="status"></div>
+    </div>
 
     <script>
-        let symmetricKey, iv, encryptedData;
+        // Store keys globally (not secure for production!)
+        let currentKeyPair = null;
 
+        // Generate RSA key pair
         async function generateKeyPair() {
-            const ec = new elliptic.ec('secp256k1');
-            const keyPair = ec.genKeyPair();
-            document.getElementById('publicKey').textContent = keyPair.getPublic('hex');
-            document.getElementById('privateKey').textContent = keyPair.getPrivate('hex');
-            return keyPair;
+            try {
+                const keyPair = await window.crypto.subtle.generateKey(
+                    {
+                        name: "RSA-OAEP",
+                        modulusLength: 2048,
+                        publicExponent: new Uint8Array([1, 0, 1]),
+                        hash: "SHA-256"
+                    },
+                    true,
+                    ["encrypt", "decrypt"]
+                );
+                return keyPair;
+            } catch (error) {
+                throw new Error(`Key generation failed: ${error.message}`);
+            }
         }
 
-        async function encryptData(data) {
-            // Generate a random symmetric key
-            symmetricKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit key
-
-            // Encrypt the data using AES-GCM
-            iv = window.crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
-            const encoder = new TextEncoder();
-            const encodedData = encoder.encode(data);
-            const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['encrypt']);
-            encryptedData = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, encodedData);
-
-            return new Uint8Array(encryptedData);
+        // Export key to base64 string
+        async function exportKey(key, format) {
+            try {
+                const exported = await window.crypto.subtle.exportKey(format, key);
+                return btoa(String.fromCharCode(...new Uint8Array(exported)));
+            } catch (error) {
+                throw new Error(`Key export failed: ${error.message}`);
+            }
         }
 
-        async function decryptData(encryptedData) {
-            // Decrypt the data using AES-GCM
-            const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['decrypt']);
-            const decryptedData = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, encryptedData);
-            const decoder = new TextDecoder();
-            return decoder.decode(decryptedData);
+        // Encrypt data
+        async function encrypt(publicKey, data) {
+            try {
+                const encoded = new TextEncoder().encode(data);
+                const encrypted = await window.crypto.subtle.encrypt(
+                    {
+                        name: "RSA-OAEP"
+                    },
+                    publicKey,
+                    encoded
+                );
+                return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+            } catch (error) {
+                throw new Error(`Encryption failed: ${error.message}`);
+            }
         }
 
-        document.getElementById('encryptButton').addEventListener('click', async () => {
-            const inputData = document.getElementById('inputData').value;
-            const encrypted = await encryptData(inputData);
-            document.getElementById('encryptedData').textContent = Array.from(encrypted).map(b => b.toString(16).padStart(2, '0')).join('');
-            document.getElementById('decryptButton').disabled = false; // Enable decrypt button
+        // Decrypt data
+        async function decrypt(privateKey, encryptedData) {
+            try {
+                const encrypted = Uint8Array.from(atob(encryptedData), c => c.charCodeAt(0));
+                const decrypted = await window.crypto.subtle.decrypt(
+                    {
+                        name: "RSA-OAEP"
+                    },
+                    privateKey,
+                    encrypted
+                );
+                return new TextDecoder().decode(decrypted);
+            } catch (error) {
+                throw new Error(`Decryption failed: ${error.message}`);
+            }
+        }
+
+        // UI Functions
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${isError ? 'error' : 'success'}`;
+        }
+
+        // Event Listeners
+        document.getElementById('generateKeys').addEventListener('click', async () => {
+            try {
+                currentKeyPair = await generateKeyPair();
+                
+                const publicKeyBase64 = await exportKey(currentKeyPair.publicKey, "spki");
+                const privateKeyBase64 = await exportKey(currentKeyPair.privateKey, "pkcs8");
+                
+                document.getElementById('publicKey').textContent = publicKeyBase64;
+                document.getElementById('privateKey').textContent = privateKeyBase64;
+                
+                showStatus('Key pair generated successfully!');
+            } catch (error) {
+                showStatus(error.message, true);
+            }
         });
 
-        document.getElementById('decryptButton').addEventListener('click', async () => {
-            const decrypted = await decryptData(encryptedData);
-            document.getElementById('decryptedData').textContent = decrypted;
+        document.getElementById('encrypt').addEventListener('click', async () => {
+            try {
+                if (!currentKeyPair) {
+                    throw new Error('Please generate keys first');
+                }
+
+                const message = document.getElementById('originalMessage').value;
+                if (!message) {
+                    throw new Error('Please enter a message to encrypt');
+                }
+
+                const encrypted = await encrypt(currentKeyPair.publicKey, message);
+                document.getElementById('encryptedMessage').value = encrypted;
+                showStatus('Message encrypted successfully!');
+            } catch (error) {
+                showStatus(error.message, true);
+            }
         });
 
-        // Generate keys on page load
-        generateKeyPair();
+        document.getElementById('decrypt').addEventListener('click', async () => {
+            try {
+                if (!currentKeyPair) {
+                    throw new Error('Please generate keys first');
+                }
+
+                const encryptedMessage = document.getElementById('encryptedMessage').value;
+                if (!encryptedMessage) {
+                    throw new Error('No encrypted message to decrypt');
+                }
+
+                const decrypted = await decrypt(currentKeyPair.privateKey, encryptedMessage);
+                document.getElementById('decryptedMessage').value = decrypted;
+                showStatus('Message decrypted successfully!');
+            } catch (error) {
+                showStatus(error.message, true);
+            }
+        });
     </script>
 </body>
 </html>
