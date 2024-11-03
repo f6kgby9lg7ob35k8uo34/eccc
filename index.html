@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECC Encryption Example</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.3/elliptic.min.js"></script>
+</head>
+<body>
+    <script>
+        async function generateKeyPair() {
+            const ec = new elliptic.ec('secp256k1');
+            const keyPair = ec.genKeyPair();
+            return {
+                publicKey: keyPair.getPublic('hex'),
+                privateKey: keyPair.getPrivate('hex')
+            };
+        }
+
+        async function encryptData(data, publicKey) {
+            // Generate a random symmetric key
+            const symmetricKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit key
+
+            // Encrypt the data using AES-GCM
+            const iv = window.crypto.getRandomValues(new Uint8Array(12)); // Initialization vector
+            const encoder = new TextEncoder();
+            const encodedData = encoder.encode(data);
+            const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['encrypt']);
+            const encryptedData = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, encodedData);
+
+            // Encrypt the symmetric key using ECDH
+            const ec = new elliptic.ec('secp256k1');
+            const keyPair = ec.keyFromPublic(publicKey, 'hex');
+            const sharedKey = keyPair.derive(ec.keyFromPrivate(privateKey)).toArray();
+            const encryptedSymmetricKey = await window.crypto.subtle.encrypt(
+                { name: 'RSA-OAEP' },
+                publicKey, // You would need to convert the public key to a suitable format
+                symmetricKey
+            );
+
+            return {
+                encryptedData: new Uint8Array(encryptedData),
+                iv: Array.from(iv),
+                encryptedSymmetricKey: Array.from(encryptedSymmetricKey)
+            };
+        }
+
+        async function decryptData(encryptedData, iv, encryptedSymmetricKey, privateKey) {
+            // Decrypt the symmetric key using the private key
+            const symmetricKey = await window.crypto.subtle.decrypt(
+                { name: 'RSA-OAEP' },
+                privateKey, // You would need to convert the private key to a suitable format
+                encryptedSymmetricKey
+            );
+
+            // Decrypt the data using AES-GCM
+            const aesKey = await window.crypto.subtle.importKey('raw', symmetricKey, 'AES-GCM', false, ['decrypt']);
+            const decryptedData = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, encryptedData);
+            const decoder = new TextDecoder();
+            return decoder.decode(decryptedData);
+        }
+
+        async function main() {
+            const { publicKey, privateKey } = await generateKeyPair();
+            console.log('Public Key:', publicKey);
+            console.log('Private Key:', privateKey);
+
+            const data = 'Hello, World!';
+            const { encryptedData, iv, encryptedSymmetricKey } = await encryptData(data, publicKey);
+            console.log('Encrypted Data:', encryptedData);
+            console.log('IV:', iv);
+            console.log('Encrypted Symmetric Key:', encryptedSymmetricKey);
+
+            const decryptedData = await decryptData(encryptedData, iv, encryptedSymmetricKey, privateKey);
+            console.log('Decrypted Data:', decryptedData);
+        }
+
+        main();
+    </script>
+</body>
+</html>
